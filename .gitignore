@@ -1,0 +1,40 @@
+# ---------- 依赖 ----------
+node_modules/
+**/node_modules/
+
+# ---------- 构建产物 ----------
+dist/
+**/dist/
+server/dist/
+
+# ---------- 运行时上传文件（由应用运行时自动创建目录）----------
+server/uploads/
+
+# ---------- 环境变量 / 密钥（.env.example 保留作为模板）----------
+*.env
+server/.env
+!*.env.example
+!server/.env.example
+
+# ---------- 日志 ----------
+*.log
+server/backend.*.log
+web/dev.*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------- 编辑器 / 操作系统 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ---------- 本地计划 / 缓存 ----------
+.claude/
+.cache/
+*.local
