@@ -139,7 +139,7 @@ router.post('/:id/spots', wrap(async (req, res) => {
   const data = pickSpot(req.body);
   if (!data.name) throw new HttpError('请输入景点名称');
   const result = await query(
-    'INSERT INTO scenic_spot (scenic_area_id, name, description, image, audio, narration, fence, is_audition, is_must_listen) VALUES (?,?,?,?,?,?,?,?,?)',
+    'INSERT INTO scenic_spot (scenic_area_id, name, description, image, audio, narration, fence, is_audition, is_must_listen, status) VALUES (?,?,?,?,?,?,?,?,?,1)',
     [req.params.id, data.name, data.description, data.image, data.audio, data.narration, fenceVal(data.fence), data.is_audition, data.is_must_listen]
   );
   const created = await queryOne('SELECT * FROM scenic_spot WHERE id = ?', [result.insertId]);
@@ -169,6 +169,19 @@ router.delete('/spots/:spotId', wrap(async (req, res) => {
   await query('UPDATE scenic_spot SET is_deleted = 1 WHERE id = ?', [req.params.spotId]);
   await opLog.record({ req, module: 'scenic', action: '删除景点', target: spot.name, before: spot, after: { isDeleted: 1 } });
   ok(res);
+}));
+
+// 景点上下线：关闭后不在景点列表中展示，线路管理也不可勾选
+router.put('/spots/:spotId/status', wrap(async (req, res) => {
+  const before = await queryOne('SELECT * FROM scenic_spot WHERE id = ? AND is_deleted = 0', [req.params.spotId]);
+  if (!before) throw new HttpError('景点不存在', 404);
+  const status = Number(req.body && req.body.status) === 0 ? 0 : 1;
+  await query('UPDATE scenic_spot SET status = ? WHERE id = ?', [status, req.params.spotId]);
+  await opLog.record({
+    req, module: 'scenic', action: status === 1 ? '景点上线' : '景点下线',
+    target: before.name, before: { status: before.status }, after: { status },
+  });
+  ok(res, { status });
 }));
 
 // 景点搜索（推荐管理选择景点用）
@@ -214,10 +227,11 @@ router.post('/:id/routes', wrap(async (req, res) => {
       const spotId = toInt(s.spotId);
       if (!spotId) continue;
       const [exist] = await conn.query(
-        'SELECT 1 FROM scenic_spot WHERE id = ? AND scenic_area_id = ? AND is_deleted = 0',
+        'SELECT name, status FROM scenic_spot WHERE id = ? AND scenic_area_id = ? AND is_deleted = 0',
         [spotId, req.params.id]
       );
       if (!exist.length) throw new HttpError(`景点 ${spotId} 不属于该景区或已删除`);
+      if (exist[0].status !== 1) throw new HttpError(`景点「${exist[0].name}」已关闭，无法加入线路`);
       await conn.query(
         'INSERT INTO scenic_route_spot (route_id, scenic_spot_id, sort_order) VALUES (?, ?, ?)',
         [rid, spotId, toInt(s.sortOrder, 0)]
@@ -263,10 +277,11 @@ router.put('/route/:routeId', wrap(async (req, res) => {
       const spotId = toInt(s.spotId);
       if (!spotId) continue;
       const [exist] = await conn.query(
-        'SELECT 1 FROM scenic_spot WHERE id = ? AND scenic_area_id = ? AND is_deleted = 0',
+        'SELECT name, status FROM scenic_spot WHERE id = ? AND scenic_area_id = ? AND is_deleted = 0',
         [spotId, before.scenic_area_id]
       );
       if (!exist.length) throw new HttpError(`景点 ${spotId} 不属于该景区或已删除`);
+      if (exist[0].status !== 1) throw new HttpError(`景点「${exist[0].name}」已关闭，无法加入线路`);
       await conn.query(
         'INSERT INTO scenic_route_spot (route_id, scenic_spot_id, sort_order) VALUES (?, ?, ?)',
         [req.params.routeId, spotId, toInt(s.sortOrder, 0)]

@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS scenic_spot (
   fence JSON NULL COMMENT '围栏：{type:"FREE",points:[{lng,lat}×4]} 或 {type:"RADIUS",center:{lng,lat},radius:米}，NULL=未设置',
   is_audition TINYINT NOT NULL DEFAULT 0 COMMENT '试听：1是 0否',
   is_must_listen TINYINT NOT NULL DEFAULT 0 COMMENT '必听：1是 0否',
+  status TINYINT NOT NULL DEFAULT 1 COMMENT '1开启 0关闭（关闭后不展示、不可加入线路）',
   is_deleted TINYINT NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

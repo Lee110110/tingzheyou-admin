@@ -40,6 +40,11 @@
             <span v-else class="dim">未上传</span>
           </template>
         </el-table-column>
+        <el-table-column label="上架状态" width="90">
+          <template #default="{ row }">
+            <el-switch :model-value="row.status === 1" @change="v => toggleStatus(row, v)" />
+          </template>
+        </el-table-column>
         <el-table-column prop="created_at" label="创建时间" width="160" />
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
@@ -168,6 +173,12 @@ async function remove(row) {
   } catch (e) { return; }
   await scenicApi.deleteSpot(row.id);
   ElMessage.success('已删除');
+  load();
+}
+
+async function toggleStatus(row, val) {
+  await scenicApi.setSpotStatus(row.id, val ? 1 : 0);
+  ElMessage.success(val ? '已上线' : '已下线（不展示在景点列表，线路中不可勾选）');
   load();
 }
 </script>

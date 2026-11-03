@@ -34,6 +34,7 @@ export const scenicApi = {
   createSpot: (areaId, data) => post(`/scenic/${areaId}/spots`, data),
   updateSpot: (spotId, data) => put(`/scenic/spots/${spotId}`, data),
   deleteSpot: spotId => del(`/scenic/spots/${spotId}`),
+  setSpotStatus: (spotId, status) => put(`/scenic/spots/${spotId}/status`, { status }),
   searchSpots: keyword => get('/scenic/spots/search', { keyword }),
   routes: areaId => get(`/scenic/${areaId}/routes`),
   createRoute: (areaId, data) => post(`/scenic/${areaId}/routes`, data),

@@ -33,7 +33,7 @@
         </el-form-item>
         <el-form-item label="包含景点">
           <div class="route-spots">
-            <div v-if="!allSpots.length" class="dim">该景区暂无景点，请先在「景点管理」中添加</div>
+            <div v-if="!allSpots.length" class="dim">该景区暂无可用景点，请先在「景点管理」中添加或开启</div>
             <div v-for="s in allSpots" :key="s.id" class="spot-row">
               <el-checkbox v-model="s.checked" @change="onCheckChange(s)">{{ s.name }}</el-checkbox>
               <div class="order-box" v-if="s.checked">
@@ -42,6 +42,7 @@
                 <el-button link type="danger" @click="s.checked = false">移出本路线</el-button>
               </div>
             </div>
+            <div v-if="disabledCount" class="dim">另有 {{ disabledCount }} 个已关闭的景点，不可勾选（可在「景点管理」中开启）</div>
           </div>
         </el-form-item>
       </el-form>
@@ -65,7 +66,8 @@ const areaId = route.params.id;
 const areaName = ref('');
 const loading = ref(false);
 const list = ref([]);
-const allSpots = ref([]); // 当前景区全部景点（含 checked / sortOrder 用于编辑）
+const allSpots = ref([]); // 当前景区可用景点（仅开启状态，含 checked / sortOrder 用于编辑）
+const disabledCount = ref(0); // 已关闭景点数（不参与勾选）
 
 const dialogVisible = ref(false);
 const saving = ref(false);
@@ -74,7 +76,9 @@ const form = reactive({ id: null, name: '' });
 onMounted(async () => {
   const area = await scenicApi.area(areaId);
   areaName.value = area.name;
-  allSpots.value = (await scenicApi.spots(areaId)).map(s => ({ id: s.id, name: s.name, checked: false, sortOrder: 0 }));
+  const spots = await scenicApi.spots(areaId);
+  disabledCount.value = spots.filter(s => s.status !== 1).length;
+  allSpots.value = spots.filter(s => s.status === 1).map(s => ({ id: s.id, name: s.name, checked: false, sortOrder: 0 }));
   load();
 });
 
