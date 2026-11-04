@@ -87,12 +87,12 @@ export const ORDER_TYPE_OPTIONS = [
 ];
 export const ORDER_TYPE_LABELS = { MEMBER_CARD: '会员卡购买', PHYSICAL: '实物订单', REDEEM: '兑换码兑换单' };
 
+// 部分退款不作为筛选项；标签/颜色映射保留 PART_REFUNDED，用于展示历史数据
 export const PAY_STATUS_OPTIONS = [
   { value: 'UNPAID', label: '待支付' },
   { value: 'PAID', label: '已支付' },
   { value: 'PAY_FAILED', label: '支付失败' },
   { value: 'REFUNDED', label: '已退款' },
-  { value: 'PART_REFUNDED', label: '部分退款' },
 ];
 export const PAY_STATUS_LABELS = { UNPAID: '待支付', PAID: '已支付', PAY_FAILED: '支付失败', REFUNDED: '已退款', PART_REFUNDED: '部分退款' };
 export const PAY_STATUS_TAG = { UNPAID: 'warning', PAID: 'success', PAY_FAILED: 'info', REFUNDED: 'danger', PART_REFUNDED: 'warning' };
