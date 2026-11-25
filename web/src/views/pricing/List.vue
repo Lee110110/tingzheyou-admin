@@ -42,10 +42,14 @@
         </el-table-column>
         <el-table-column label="绑定 SKU" min-width="240">
           <template #default="{ row }">
-            <div v-for="it in row.items" :key="it.skuId" class="sku-item">
+            <div v-for="it in row.items.slice(0, 3)" :key="it.skuId" class="sku-item">
               <span class="dim">{{ it.productName }} / {{ it.skuName }}</span>
               <span class="money">¥{{ (it.salePrice / 100).toFixed(2) }}</span>
               <span class="dim line-through">¥{{ (it.originalPrice / 100).toFixed(2) }}</span>
+            </div>
+            <div v-if="row.items.length > 3" class="sku-item">
+              <span class="dim">共 {{ row.items.length }} 个 SKU</span>
+              <el-button link type="primary" @click="openSkuList(row)">查看全部</el-button>
             </div>
           </template>
         </el-table-column>
@@ -250,6 +254,29 @@
         <el-descriptions-item label="划线原价">¥{{ ((resolveResult.originalPrice || 0) / 100).toFixed(2) }}</el-descriptions-item>
       </el-descriptions>
     </el-dialog>
+
+    <!-- 绑定 SKU 明细（列表「查看全部」） -->
+    <el-dialog v-model="skuListVisible" :title="`绑定 SKU：${skuListPlanName}`" width="720px">
+      <el-input
+        v-model="skuListKeyword" placeholder="搜索商品 / SKU 名称" clearable
+        style="width: 260px; margin-bottom: 10px"
+      />
+      <el-table :data="filteredSkuList" size="small" max-height="480" empty-text="暂无数据">
+        <el-table-column prop="productName" label="商品" min-width="180" />
+        <el-table-column prop="skuName" label="SKU" min-width="110" />
+        <el-table-column label="划线原价（元）" width="130">
+          <template #default="{ row }">
+            <span class="dim line-through">¥{{ (row.originalPrice / 100).toFixed(2) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="售卖价（元）" width="130">
+          <template #default="{ row }">
+            <span class="money">¥{{ (row.salePrice / 100).toFixed(2) }}</span>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="dim" style="margin-top: 8px">共 {{ filteredSkuList.length }} / {{ skuListItems.length }} 个 SKU</div>
+    </el-dialog>
   </div>
 </template>
 
@@ -307,6 +334,24 @@ const resolving = ref(false);
 const resolve = reactive({ productId: '', skuId: '', channel: 'MINI_PROGRAM', audience: 'ALL' });
 const resolveSkus = ref([]);
 const resolveResult = ref(null);
+
+// 绑定 SKU 明细弹窗（列表「查看全部」）
+const skuListVisible = ref(false);
+const skuListPlanName = ref('');
+const skuListItems = ref([]);
+const skuListKeyword = ref('');
+const filteredSkuList = computed(() => {
+  const kw = skuListKeyword.value.trim();
+  if (!kw) return skuListItems.value;
+  return skuListItems.value.filter(it => `${it.productName} ${it.skuName}`.includes(kw));
+});
+
+function openSkuList(row) {
+  skuListPlanName.value = row.name;
+  skuListItems.value = row.items || [];
+  skuListKeyword.value = '';
+  skuListVisible.value = true;
+}
 
 onMounted(async () => {
   load();
