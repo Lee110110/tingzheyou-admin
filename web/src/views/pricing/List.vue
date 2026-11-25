@@ -145,7 +145,6 @@
             <el-select v-model="pickerProductId" filterable placeholder="选择商品载入 SKU" style="width: 220px" @change="loadProductSkus">
               <el-option v-for="p in productOptions" :key="p.id" :value="p.id" :label="p.name" />
             </el-select>
-            <el-button style="margin-left: 8px" :disabled="!pickerSkus.length" @click="toggleSelectAllCurrent">全选本商品</el-button>
             <el-button type="primary" plain style="margin-left: 8px" :disabled="!pendingSkus.length" @click="addPickedSkus">
               添加已选（{{ pendingSkus.length }}）
             </el-button>
@@ -396,13 +395,6 @@ async function loadProductSkus(productId) {
   if (!productId) { pickerSkus.value = []; return; }
   const p = await productApi.detail(productId);
   pickerSkus.value = p.skus || [];
-}
-
-// 全选 / 取消全选当前商品的 SKU
-function toggleSelectAllCurrent() {
-  if (!pickerSkus.value.length || !pickerTable.value) return;
-  const allSelected = pickerSkus.value.every(s => pickerSelected.value.some(sel => sel.id === s.id));
-  pickerSkus.value.forEach(s => pickerTable.value.toggleRowSelection(s, !allSelected));
 }
 
 function clearPicked() {
