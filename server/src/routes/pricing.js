@@ -66,6 +66,25 @@ router.get('/sku-bound', wrap(async (req, res) => {
   ok(res, await pricing.getBoundPlans(skuId, req.query.excludePlanId || null));
 }));
 
+// 批量查询 SKU 已绑定的启用方案（批量添加 SKU 时的冲突提示，一次查全部）
+router.post('/sku-bound-batch', wrap(async (req, res) => {
+  const body = req.body || {};
+  const skuIds = Array.isArray(body.skuIds) ? body.skuIds.map(toInt).filter(Boolean) : [];
+  if (!skuIds.length) throw new HttpError('请指定 SKU');
+  const excludePlanId = body.excludePlanId || null;
+  const rows = await query(
+    `SELECT ps.sku_id, p.name AS plan_name
+     FROM price_plan_sku ps JOIN price_plan p ON p.id = ps.plan_id
+     WHERE ps.sku_id IN (?) AND p.status = 'ENABLED'${excludePlanId ? ' AND p.id != ?' : ''}`,
+    excludePlanId ? [skuIds, excludePlanId] : [skuIds]
+  );
+  const bySku = {};
+  rows.forEach(r => {
+    (bySku[r.sku_id] = bySku[r.sku_id] || []).push(r.plan_name);
+  });
+  ok(res, bySku);
+}));
+
 router.get('/:id', wrap(async (req, res) => {
   const plan = await queryOne('SELECT * FROM price_plan WHERE id = ?', [req.params.id]);
   if (!plan) throw new HttpError('方案不存在', 404);

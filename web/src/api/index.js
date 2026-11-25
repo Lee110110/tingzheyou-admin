@@ -62,6 +62,7 @@ export const pricingApi = {
   setStatus: (id, status) => put(`/pricing/${id}/status`, { status }),
   resolve: (skuId, channel, audience) => get('/pricing/resolve', { skuId, channel, audience }),
   skuBound: (skuId, excludePlanId) => get('/pricing/sku-bound', { skuId, excludePlanId }),
+  skuBoundBatch: (skuIds, excludePlanId) => post('/pricing/sku-bound-batch', { skuIds, excludePlanId }),
 };
 
 export const redeemApi = {

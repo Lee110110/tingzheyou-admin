@@ -145,9 +145,16 @@
             <el-select v-model="pickerProductId" filterable placeholder="选择商品载入 SKU" style="width: 220px" @change="loadProductSkus">
               <el-option v-for="p in productOptions" :key="p.id" :value="p.id" :label="p.name" />
             </el-select>
-            <el-button style="margin-left: 8px" @click="addPickerSkus">添加选中 SKU</el-button>
+            <el-button style="margin-left: 8px" :disabled="!pickerSkus.length" @click="toggleSelectAllCurrent">全选本商品</el-button>
+            <el-button type="primary" plain style="margin-left: 8px" :disabled="!pendingSkus.length" @click="addPickedSkus">
+              添加已选（{{ pendingSkus.length }}）
+            </el-button>
+            <el-button v-if="pendingSkus.length" link type="danger" style="margin-left: 8px" @click="clearPicked">清空已选</el-button>
           </div>
-          <el-table v-if="pickerSkus.length" :data="pickerSkus" size="small" style="margin-top: 8px" @selection-change="sel => (pickerSelected = sel)">
+          <el-table
+            v-if="pickerSkus.length" ref="pickerTable" :data="pickerSkus" size="small" style="margin-top: 8px"
+            @selection-change="sel => (pickerSelected = sel)"
+          >
             <el-table-column type="selection" width="40" />
             <el-table-column prop="name" label="SKU" min-width="100" />
             <el-table-column label="卡类型" width="80">
@@ -157,10 +164,29 @@
               <template #default="{ row }">{{ parsePlatforms(row.platforms).map(p => PLAN_CHANNEL_LABELS[p] || p).join('、') || '-' }}</template>
             </el-table-column>
           </el-table>
+          <div v-if="pendingSkus.length" class="dim" style="margin-top: 6px">
+            待添加 {{ pendingSkus.length }} 个 SKU（切换商品勾选会保留，已在清单中的自动跳过）
+          </div>
         </el-form-item>
 
         <el-form-item v-if="form.items.length" label=" ">
-          <el-table :data="form.items" size="small" style="width: 100%">
+          <div class="batch-bar">
+            <span class="dim">批量设置：</span>
+            <span class="dim">原价</span>
+            <PriceInput v-model="batchOriginal" />
+            <span class="dim" style="margin-left: 8px">售价</span>
+            <PriceInput v-model="batchSale" />
+            <el-button size="small" type="primary" plain style="margin-left: 12px" @click="applyBatchPrice(form.items)">应用到全部</el-button>
+            <el-button size="small" :disabled="!itemSelected.length" @click="applyBatchPrice(itemSelected)">
+              应用到选中（{{ itemSelected.length }}）
+            </el-button>
+            <el-button size="small" @click="clearItemPrices">清空价格</el-button>
+          </div>
+          <el-table
+            :data="form.items" size="small" style="width: 100%; margin-top: 4px"
+            @selection-change="sel => (itemSelected = sel)"
+          >
+            <el-table-column type="selection" width="40" />
             <el-table-column label="商品" min-width="140">
               <template #default="{ row }">{{ row.productName }}</template>
             </el-table-column>
@@ -229,7 +255,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus';
 import { pricingApi, productApi } from '../../api';
 import {
@@ -255,6 +281,27 @@ const form = reactive({
 const pickerProductId = ref('');
 const pickerSkus = ref([]);
 const pickerSelected = ref([]);
+const pickerTable = ref(null);
+// 跨商品累积勾选：切换商品不清空，添加时统一并入定价清单
+const pickedSkus = ref([]); // [{ skuId, skuName, productId, productName }]
+
+// 待添加的 SKU = 累积勾选 ∪ 当前表格勾选（去重，去掉已在清单中的），按钮实时跟随
+const pendingSkus = computed(() => {
+  const cur = pickerSelected.value.map(s => ({
+    skuId: s.id, skuName: s.name, productId: pickerProductId.value || null,
+    productName: (productOptions.value.find(p => p.id === pickerProductId.value) || {}).name || '',
+  }));
+  const map = new Map();
+  [...pickedSkus.value, ...cur].forEach(p => {
+    if (!map.has(p.skuId)) map.set(p.skuId, p);
+  });
+  return [...map.values()].filter(p => !form.items.some(it => it.skuId === p.skuId));
+});
+
+// 定价清单批量填价
+const batchOriginal = ref(null);
+const batchSale = ref(null);
+const itemSelected = ref([]);
 
 const resolveVisible = ref(false);
 const resolving = ref(false);
@@ -312,6 +359,10 @@ function openDialog(row) {
   pickerProductId.value = '';
   pickerSkus.value = [];
   pickerSelected.value = [];
+  pickedSkus.value = [];
+  batchOriginal.value = null;
+  batchSale.value = null;
+  itemSelected.value = [];
   if (row) {
     form.id = row.id;
     form.name = row.name;
@@ -326,34 +377,80 @@ function openDialog(row) {
   dialogVisible.value = true;
 }
 
+// 切换商品前，把当前商品的表格勾选并入累积（当前商品以表格勾选为准覆盖）
+function commitCurrentSelection() {
+  const pid = pickerProductId.value;
+  if (!pid) return;
+  const others = pickedSkus.value.filter(p => p.productId !== pid);
+  const cur = pickerSelected.value
+    .filter(s => !others.some(p => p.skuId === s.id))
+    .map(s => ({
+      skuId: s.id, skuName: s.name, productId: pid,
+      productName: (productOptions.value.find(p => p.id === pid) || {}).name || '',
+    }));
+  pickedSkus.value = [...others, ...cur];
+}
+
 async function loadProductSkus(productId) {
+  commitCurrentSelection();
   if (!productId) { pickerSkus.value = []; return; }
   const p = await productApi.detail(productId);
   pickerSkus.value = p.skus || [];
 }
 
-async function addPickerSkus() {
-  if (!pickerSelected.value.length) return ElMessage.warning('请先勾选要定价的 SKU');
-  for (const sku of pickerSelected.value) {
-    if (form.items.some(it => it.skuId === sku.id)) continue;
+// 全选 / 取消全选当前商品的 SKU
+function toggleSelectAllCurrent() {
+  if (!pickerSkus.value.length || !pickerTable.value) return;
+  const allSelected = pickerSkus.value.every(s => pickerSelected.value.some(sel => sel.id === s.id));
+  pickerSkus.value.forEach(s => pickerTable.value.toggleRowSelection(s, !allSelected));
+}
+
+function clearPicked() {
+  pickedSkus.value = [];
+  if (pickerTable.value) pickerSkus.value.forEach(s => pickerTable.value.toggleRowSelection(s, false));
+}
+
+async function addPickedSkus() {
+  commitCurrentSelection(); // 未切换商品直接点添加时，先把当前勾选并入
+  if (!pickedSkus.value.length) return ElMessage.warning('请先勾选要定价的 SKU');
+  const toAdd = pickedSkus.value.filter(p => !form.items.some(it => it.skuId === p.skuId));
+  if (!toAdd.length) return ElMessage.warning('勾选的 SKU 均已在定价清单中');
+  for (const p of toAdd) {
     form.items.push({
-      skuId: sku.id,
-      skuName: sku.name,
-      productName: (productOptions.value.find(p => p.id === pickerProductId.value) || {}).name || '',
-      originalPrice: null,
-      salePrice: null,
+      skuId: p.skuId, skuName: p.skuName, productName: p.productName,
+      originalPrice: null, salePrice: null,
     });
-    // 冲突提示：SKU 已绑定其他启用方案（不阻止保存）
-    const bound = await pricingApi.skuBound(sku.id, form.id || null);
-    const active = bound.filter(b => b.status === 'ENABLED');
-    if (active.length) {
-      ElNotification.warning({
-        title: '优先级冲突提醒',
-        message: `SKU「${sku.name}」已绑定启用中的方案：${active.map(b => b.name).join('、')}，将按命中规则（优先级 > 渠道精确 > 创建时间）取价`,
-        duration: 6000,
-      });
-    }
   }
+  // 冲突提示（批量一次查询）：SKU 已绑定其他启用方案（不阻止保存）
+  const boundMap = await pricingApi.skuBoundBatch(toAdd.map(p => p.skuId), form.id || null);
+  const conflicts = Object.entries(boundMap || {});
+  if (conflicts.length) {
+    ElNotification.warning({
+      title: '优先级冲突提醒',
+      message: conflicts.map(([skuId, names]) => {
+        const it = toAdd.find(p => p.skuId === Number(skuId));
+        return `SKU「${it ? it.skuName : `#${skuId}`}」已绑定启用中的方案：${names.join('、')}`;
+      }).join('；') + '，将按命中规则（优先级 > 渠道精确 > 创建时间）取价',
+      duration: 6000,
+    });
+  }
+  clearPicked();
+}
+
+// 批量填价：只覆盖已填的一侧（原价/售价），另一侧保留原值；应用后仍可逐行单独修改
+function applyBatchPrice(rows) {
+  if (batchOriginal.value == null && batchSale.value == null) return ElMessage.warning('请先填写批量设置的原价或售价');
+  if (!rows || !rows.length) return ElMessage.warning('没有可应用的 SKU 行');
+  rows.forEach(r => {
+    if (batchOriginal.value != null) r.originalPrice = batchOriginal.value;
+    if (batchSale.value != null) r.salePrice = batchSale.value;
+  });
+  ElMessage.success(`已批量应用到 ${rows.length} 行`);
+}
+
+function clearItemPrices() {
+  form.items.forEach(r => { r.originalPrice = null; r.salePrice = null; });
+  ElMessage.success('已清空价格，可重新批量设置或逐行填写');
 }
 
 async function save() {
@@ -430,4 +527,5 @@ async function runResolve() {
 .sku-item { display: flex; gap: 10px; align-items: center; line-height: 22px; }
 .line-through { text-decoration: line-through; }
 .sku-picker { display: flex; align-items: center; }
+.batch-bar { display: flex; align-items: center; gap: 6px; width: 100%; flex-wrap: wrap; margin-bottom: 4px; }
 </style>
