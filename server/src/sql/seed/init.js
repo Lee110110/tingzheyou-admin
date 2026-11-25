@@ -97,7 +97,7 @@ async function main() {
 
   // 6. 系统配置
   await conn.query(
-    "INSERT INTO sys_config (config_key, config_value, remark) VALUES ('pay_expire_minutes', '30', '待支付订单超时自动关闭（分钟）') ON DUPLICATE KEY UPDATE remark = VALUES(remark)"
+    "INSERT INTO sys_config (config_key, config_value, remark) VALUES ('pay_expire_minutes', '30', '待支付订单超时自动关闭（分钟）'), ('max_cumulative_months', '36', '时长卡同范围累计有效期上限（月），C 端重复购买校验用，见需求文档 7.11') ON DUPLICATE KEY UPDATE remark = VALUES(remark)"
   );
 
   await conn.end();
