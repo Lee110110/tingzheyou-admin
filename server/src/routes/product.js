@@ -19,6 +19,15 @@ function pickProduct(body = {}) {
   };
 }
 
+// 所属景区：空 = 通用卡；传入时校验景区存在且未删除
+async function pickScenicAreaId(raw) {
+  if (raw === null || raw === undefined || raw === '') return null;
+  const id = toInt(raw);
+  const area = await queryOne('SELECT id FROM scenic_area WHERE id = ? AND is_deleted = 0', [id]);
+  if (!area) throw new HttpError('所属景区不存在或已删除');
+  return id;
+}
+
 // SKU 名称按规格生成（时长卡 0 = 永久，1 为历史规格）
 function skuName(cardType, specValue) {
   if (cardType === 'DURATION') {
@@ -144,6 +153,15 @@ router.get('/list', wrap(async (req, res) => {
   const params = [];
   if (req.query.keyword) { where.push('p.name LIKE ?'); params.push(like(req.query.keyword)); }
   if (req.query.status) { where.push('p.status = ?'); params.push(req.query.status); }
+  if (req.query.scenicAreaId) { where.push('p.scenic_area_id = ?'); params.push(toInt(req.query.scenicAreaId)); }
+  if (req.query.provinceCode) {
+    where.push('p.scenic_area_id IN (SELECT id FROM scenic_area WHERE province_code = ? AND is_deleted = 0)');
+    params.push(req.query.provinceCode);
+  }
+  if (req.query.cityCode) {
+    where.push('p.scenic_area_id IN (SELECT id FROM scenic_area WHERE city_code = ? AND is_deleted = 0)');
+    params.push(req.query.cityCode);
+  }
   // 卡类型按 SKU 聚合判断（同一商品可同时含时长卡/次卡 SKU）
   if (req.query.cardType) {
     where.push('EXISTS(SELECT 1 FROM product_sku s WHERE s.product_id = p.id AND s.is_deleted = 0 AND s.card_type = ?)');
@@ -152,13 +170,15 @@ router.get('/list', wrap(async (req, res) => {
   const whereSql = where.join(' AND ');
   const total = (await queryOne(`SELECT COUNT(*) AS c FROM product p WHERE ${whereSql}`, params)).c;
   const list = await query(
-    `SELECT p.*,
+    `SELECT p.*, sa.name AS scenic_area_name,
        (SELECT COUNT(*) FROM product_sku s WHERE s.product_id = p.id AND s.is_deleted = 0) AS sku_count,
        (SELECT GROUP_CONCAT(DISTINCT s.card_type) FROM product_sku s WHERE s.product_id = p.id AND s.is_deleted = 0) AS card_types,
        (SELECT COUNT(*) FROM product_sku s WHERE s.product_id = p.id AND s.is_deleted = 0 AND s.stock IS NOT NULL) AS limited_sku_count,
        (SELECT COALESCE(SUM(s.stock), 0) FROM product_sku s WHERE s.product_id = p.id AND s.is_deleted = 0 AND s.stock IS NOT NULL) AS total_stock,
        (SELECT COUNT(*) FROM product_sku s WHERE s.product_id = p.id AND s.is_deleted = 0 AND s.stock IS NOT NULL AND s.stock > 0) AS in_stock_skus
-     FROM product p WHERE ${whereSql} ORDER BY p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`,
+     FROM product p
+     LEFT JOIN scenic_area sa ON sa.id = p.scenic_area_id
+     WHERE ${whereSql} ORDER BY p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`,
     [...params, pageSize, offset]
   );
   ok(res, { list, total, page, pageSize });
@@ -174,7 +194,11 @@ router.get('/all', wrap(async (req, res) => {
 }));
 
 router.get('/:id', wrap(async (req, res) => {
-  const product = await queryOne('SELECT * FROM product WHERE id = ? AND is_deleted = 0', [req.params.id]);
+  const product = await queryOne(
+    `SELECT p.*, (SELECT sa.name FROM scenic_area sa WHERE sa.id = p.scenic_area_id) AS scenic_area_name
+     FROM product p WHERE p.id = ? AND p.is_deleted = 0`,
+    [req.params.id]
+  );
   if (!product) throw new HttpError('商品不存在', 404);
   const skus = await query('SELECT * FROM product_sku WHERE product_id = ? AND is_deleted = 0 ORDER BY id', [req.params.id]);
   ok(res, { ...product, skus });
@@ -183,11 +207,12 @@ router.get('/:id', wrap(async (req, res) => {
 router.post('/', wrap(async (req, res) => {
   const data = pickProduct(req.body);
   if (!data.name) throw new HttpError('请输入商品名称');
+  const scenicAreaId = await pickScenicAreaId(req.body.scenicAreaId);
   validateSkus(req.body.skus);
   const productId = await withTransaction(async conn => {
     const [result] = await conn.query(
-      'INSERT INTO product (name, subtitle, detail_images, purchase_notice, agreement, status) VALUES (?,?,?,?,?,?)',
-      [data.name, data.subtitle, JSON.stringify(data.detail_images), data.purchase_notice, data.agreement, data.status]
+      'INSERT INTO product (name, subtitle, scenic_area_id, detail_images, purchase_notice, agreement, status) VALUES (?,?,?,?,?,?,?)',
+      [data.name, data.subtitle, scenicAreaId, JSON.stringify(data.detail_images), data.purchase_notice, data.agreement, data.status]
     );
     const id = result.insertId;
     await saveSkus(conn, id, req.body.skus);
@@ -204,11 +229,12 @@ router.put('/:id', wrap(async (req, res) => {
   if (!before) throw new HttpError('商品不存在', 404);
   const data = pickProduct(req.body);
   if (!data.name) throw new HttpError('请输入商品名称');
+  const scenicAreaId = await pickScenicAreaId(req.body.scenicAreaId);
   validateSkus(req.body.skus);
   await withTransaction(async conn => {
     await conn.query(
-      'UPDATE product SET name=?, subtitle=?, detail_images=?, purchase_notice=?, agreement=?, status=? WHERE id=?',
-      [data.name, data.subtitle, JSON.stringify(data.detail_images), data.purchase_notice, data.agreement, data.status, req.params.id]
+      'UPDATE product SET name=?, subtitle=?, scenic_area_id=?, detail_images=?, purchase_notice=?, agreement=?, status=? WHERE id=?',
+      [data.name, data.subtitle, scenicAreaId, JSON.stringify(data.detail_images), data.purchase_notice, data.agreement, data.status, req.params.id]
     );
     await saveSkus(conn, Number(req.params.id), req.body.skus);
   });

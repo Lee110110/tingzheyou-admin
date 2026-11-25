@@ -13,8 +13,11 @@ const {
 router.use(authRequired, permRequired('order'));
 
 const LIST_SQL = `
-  SELECT o.*, u.nickname AS user_nickname, u.phone AS user_phone
-  FROM orders o JOIN user u ON u.id = o.user_id`;
+  SELECT o.*, u.nickname AS user_nickname, u.phone AS user_phone, sa.name AS scenic_area_name
+  FROM orders o
+  JOIN user u ON u.id = o.user_id
+  LEFT JOIN product p ON p.id = o.product_id
+  LEFT JOIN scenic_area sa ON sa.id = p.scenic_area_id`;
 
 function toArray(v) {
   if (!v) return [];
@@ -57,11 +60,12 @@ router.get('/export', wrap(async (req, res) => {
     params
   );
   await sendExcel(res, `订单导出-${dayjs().format('YYYYMMDD-HHmmss')}.xlsx`,
-    ['订单号', '用户ID', '用户昵称', '手机号', '渠道', '订单项', '原价(元)', '实付(元)', '支付方式', '支付状态', '履约状态', '关闭原因', '下单时间', '支付时间'],
+    ['订单号', '用户ID', '用户昵称', '手机号', '渠道', '订单项', '所属景区', '原价(元)', '实付(元)', '支付方式', '支付状态', '履约状态', '关闭原因', '下单时间', '支付时间'],
     list.map(o => [
       o.order_no, o.user_id, o.user_nickname, o.user_phone,
       USER_CHANNEL_LABELS[o.channel] || o.channel,
       o.sku_name,
+      o.scenic_area_name || (o.product_id ? '全国通用' : '-'),
       (o.original_price / 100).toFixed(2),
       (o.pay_amount / 100).toFixed(2),
       PAY_METHOD_LABELS[o.pay_method] || o.pay_method || '',

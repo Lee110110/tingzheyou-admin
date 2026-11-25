@@ -123,11 +123,13 @@ CREATE TABLE IF NOT EXISTS product (
   detail_images JSON NULL COMMENT '详情图',
   purchase_notice TEXT NULL COMMENT '购买须知',
   agreement TEXT NULL COMMENT '协议文本',
+  scenic_area_id INT UNSIGNED NULL COMMENT '所属景区，NULL=通用卡（跨景区/按级别）',
   status VARCHAR(20) NOT NULL DEFAULT 'OFF' COMMENT 'ON上架 OFF下架 HALTED停售',
   is_deleted TINYINT NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  KEY idx_status (status)
+  KEY idx_status (status),
+  KEY idx_scenic_area (scenic_area_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品（会员卡展示载体）';
 
 CREATE TABLE IF NOT EXISTS product_sku (

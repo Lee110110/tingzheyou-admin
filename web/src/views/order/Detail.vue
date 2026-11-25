@@ -20,6 +20,7 @@
         </el-descriptions-item>
         <el-descriptions-item label="渠道">{{ USER_CHANNEL_LABELS[order.channel] || order.channel }}</el-descriptions-item>
         <el-descriptions-item label="订单项">{{ order.sku_name || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="所属景区">{{ order.scenic_area_name || (order.product_id ? '全国通用' : '-') }}</el-descriptions-item>
         <el-descriptions-item label="原价">¥{{ (order.original_price / 100).toFixed(2) }}</el-descriptions-item>
         <el-descriptions-item label="实付">
           <span class="money">¥{{ (order.pay_amount / 100).toFixed(2) }}</span>

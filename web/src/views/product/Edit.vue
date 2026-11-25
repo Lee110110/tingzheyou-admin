@@ -16,6 +16,15 @@
             <el-form-item label="卡副标题">
               <el-input v-model="form.subtitle" placeholder="一句话卖点" />
             </el-form-item>
+            <el-form-item label="所属景区">
+              <el-select
+                v-model="form.scenicAreaId" placeholder="不选 = 全国通用卡" clearable filterable remote
+                :remote-method="searchAreas" :loading="areaSearchLoading" style="width: 280px"
+              >
+                <el-option v-for="a in areaSelectOptions" :key="a.id" :value="a.id" :label="a.name" />
+              </el-select>
+              <div class="dim" style="width: 100%">选择景区后为单景区专属商品；不选则全国通用</div>
+            </el-form-item>
             <el-form-item label="上架状态">
               <el-select v-model="form.status" style="width: 160px">
                 <el-option v-for="o in PRODUCT_STATUS_OPTIONS" :key="o.value" :value="o.value" :label="o.label" />
@@ -194,12 +203,26 @@ const regionNames = ref({});
 const form = reactive({
   name: '',
   subtitle: '',
+  scenicAreaId: '',
   status: 'OFF',
   detailImages: [],
   purchaseNotice: '',
   agreement: '',
   skus: [], // 每条 SKU 独立承载履约配置
 });
+
+// 所属景区远程搜索（与 SKU 弹窗的选择景区列表分开维护，互不影响）
+const areaSelectOptions = ref([]);
+const areaSearchLoading = ref(false);
+async function searchAreas(keyword) {
+  areaSearchLoading.value = true;
+  try {
+    const data = await scenicApi.areas({ page: 1, pageSize: 20, keyword: keyword || '' });
+    areaSelectOptions.value = data.list;
+  } finally {
+    areaSearchLoading.value = false;
+  }
+}
 
 function parseJson(s) {
   if (!s) return [];
@@ -215,6 +238,11 @@ onMounted(async () => {
     const p = await productApi.detail(id);
     form.name = p.name;
     form.subtitle = p.subtitle || '';
+    form.scenicAreaId = p.scenic_area_id || '';
+    // 编辑时回显所属景区（远程搜索列表里可能没有这一项）
+    if (p.scenic_area_id) {
+      areaSelectOptions.value = [{ id: p.scenic_area_id, name: p.scenic_area_name || `#${p.scenic_area_id}` }];
+    }
     form.status = p.status;
     form.detailImages = parseJson(p.detail_images);
     form.purchaseNotice = p.purchase_notice || '';
@@ -275,6 +303,16 @@ function openSkuDialog(row, index) {
     isLimited: row.stock != null, stock: row.stock,
   } : {});
   if (skuForm.cardType === 'DURATION') ensureDurationOption(skuForm.durationMonths);
+  // 新增 SKU 且商品挂了景区：权益范围默认指向该景区（编辑已有 SKU 不联动）
+  if (!row && form.scenicAreaId) {
+    skuForm.scopeType = 'SCENIC';
+    skuForm.scopeScenicIds = [form.scenicAreaId];
+    // 确保该景区在 SKU 弹窗的可选列表中可回显（远程搜索列表与弹窗列表分开维护）
+    if (!areaOptions.value.some(a => a.id === form.scenicAreaId)) {
+      const found = areaSelectOptions.value.find(a => a.id === form.scenicAreaId);
+      if (found) areaOptions.value = [...areaOptions.value, found];
+    }
+  }
   skuDialogVisible.value = true;
 }
 
@@ -361,6 +399,7 @@ async function save() {
   const body = {
     name: form.name,
     subtitle: form.subtitle,
+    scenicAreaId: form.scenicAreaId || null,
     detailImages: form.detailImages,
     purchaseNotice: form.purchaseNotice,
     agreement: form.agreement,

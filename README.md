@@ -24,6 +24,7 @@ houtai/
         schema.sql      # 建库建表（23 张表）
         migrate-v2.js   # 存量库增量迁移：围栏/试听必听/线路/内容位/渠道 APP→IOS（幂等）
         migrate-v3.js   # 存量库增量迁移：景点上下线状态（幂等，存量景点默认开启）
+        migrate-v4.js   # 存量库增量迁移：商品关联景区 scenic_area_id（幂等，存量商品为通用卡）
         seed/init.js    # 建库 + 区划/菜单/角色/admin 种子（幂等）
         seed/demo.js    # 演示业务数据（可重复执行）
     uploads/            # 上传文件（images/、audio/），运行时生成
@@ -78,4 +79,4 @@ npm run dev     # 打开 http://localhost:5173（/api、/uploads 已代理到 30
 - **待支付超时**：默认 30 分钟自动关闭（由 `sys_config` 表 `pay_expire_minutes` 配置），后端每 60 秒执行一次定时任务；demo 数据中包含一条 2 小时前的待支付订单，服务启动 1 分钟内会被自动关闭。
 - **兑换码**：8 位，字符集为 `2-9 + A-Z 去掉 I/O`，全局唯一。
 - **重新初始化**：`npm run init`（幂等，不会清角色配置）；`npm run demo` 会清空业务表（订单/商品/景区等）后重建演示数据。
-- **存量库升级**：已初始化过的数据库直接跑增量迁移脚本（幂等，可重复执行）：`node src/sql/migrate-v2.js`、`node src/sql/migrate-v3.js`（景点上下线状态）。
+- **存量库升级**：已初始化过的数据库直接跑增量迁移脚本（幂等，可重复执行）：`node src/sql/migrate-v2.js`、`node src/sql/migrate-v3.js`（景点上下线状态）、`node src/sql/migrate-v4.js`（商品关联景区）。

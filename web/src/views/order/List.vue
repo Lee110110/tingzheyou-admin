@@ -47,6 +47,9 @@
         <el-table-column label="订单项" min-width="120">
           <template #default="{ row }">{{ row.sku_name || '-' }}</template>
         </el-table-column>
+        <el-table-column label="所属景区" width="120">
+          <template #default="{ row }">{{ row.scenic_area_name || (row.product_id ? '全国通用' : '-') }}</template>
+        </el-table-column>
         <el-table-column label="原价" width="100">
           <template #default="{ row }">
             <span class="dim">¥{{ (row.original_price / 100).toFixed(2) }}</span>

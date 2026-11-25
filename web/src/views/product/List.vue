@@ -3,6 +3,13 @@
     <el-card class="page-card" shadow="never">
       <div class="filter-bar">
         <el-input v-model="query.keyword" placeholder="卡名称" clearable @keyup.enter="search" />
+        <el-select
+          v-model="query.scenicAreaId" placeholder="所属景区" clearable filterable remote
+          :remote-method="searchAreas" :loading="areaSearchLoading" style="width: 170px"
+        >
+          <el-option v-for="a in areaOptions" :key="a.id" :value="a.id" :label="a.name" />
+        </el-select>
+        <RegionCascader v-model="query.region" placeholder="景区所在省 / 市" />
         <el-select v-model="query.cardType" placeholder="卡类型" clearable style="width: 120px">
           <el-option v-for="o in CARD_TYPE_OPTIONS" :key="o.value" :value="o.value" :label="o.label" />
         </el-select>
@@ -24,6 +31,9 @@
             <div class="name">{{ row.name }}</div>
             <div class="dim">{{ row.subtitle || '-' }}</div>
           </template>
+        </el-table-column>
+        <el-table-column label="所属景区" width="120">
+          <template #default="{ row }">{{ row.scenic_area_name || '全国通用' }}</template>
         </el-table-column>
         <el-table-column label="卡类型" width="120">
           <template #default="{ row }">
@@ -89,7 +99,8 @@
 import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { productApi } from '../../api';
+import { productApi, scenicApi } from '../../api';
+import RegionCascader from '../../components/RegionCascader.vue';
 import {
   CARD_TYPE_OPTIONS, CARD_TYPE_LABELS, PRODUCT_STATUS_OPTIONS, PRODUCT_STATUS_LABELS,
   PRODUCT_STATUS_TAG, PAGE_SIZE,
@@ -100,20 +111,40 @@ const loading = ref(false);
 const list = ref([]);
 const total = ref(0);
 const page = ref(1);
-const query = reactive({ keyword: '', cardType: '', status: '' });
+const query = reactive({ keyword: '', scenicAreaId: '', region: [], cardType: '', status: '' });
+
+// 景区远程搜索（300+ 景区，不做全量下拉）
+const areaOptions = ref([]);
+const areaSearchLoading = ref(false);
+async function searchAreas(keyword) {
+  areaSearchLoading.value = true;
+  try {
+    const data = await scenicApi.areas({ page: 1, pageSize: 20, keyword: keyword || '' });
+    areaOptions.value = data.list;
+  } finally {
+    areaSearchLoading.value = false;
+  }
+}
 
 function parseCardTypes(csv) {
   return csv ? String(csv).split(',').filter(Boolean) : [];
 }
 
-onMounted(load);
+onMounted(() => {
+  load();
+  searchAreas('');
+});
 
 async function load() {
   loading.value = true;
   try {
     const data = await productApi.list({
       page: page.value, pageSize: PAGE_SIZE,
-      keyword: query.keyword || '', cardType: query.cardType || '', status: query.status || '',
+      keyword: query.keyword || '',
+      scenicAreaId: query.scenicAreaId || '',
+      provinceCode: (query.region && query.region[0]) || '',
+      cityCode: (query.region && query.region[1]) || '',
+      cardType: query.cardType || '', status: query.status || '',
     });
     list.value = data.list;
     total.value = data.total;
@@ -129,6 +160,8 @@ function search() {
 
 function reset() {
   query.keyword = '';
+  query.scenicAreaId = '';
+  query.region = [];
   query.cardType = '';
   query.status = '';
   search();
